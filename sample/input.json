@@ -1,0 +1,34 @@
+[
+    {
+        "Model": "Poweredge R630",
+        "Vendor": "Dell"
+    }, 
+    {
+        "Model": "Poweredge R330",
+        "Vendor": "Dell"
+    }, 
+    {
+        "Model": "Poweredge R730",
+        "Vendor": "Dell"
+    }, 
+    {
+        "Model": "Poweredge R930",
+        "Vendor": "Dell"
+    }, 
+    {
+        "Model": "ProLiant DL380 Gen9",
+        "Vendor": "HP"
+    }, 
+    {
+        "Model": "ProLiant DL360 Gen10",
+        "Vendor": "HP"
+    }, 
+    {
+        "Model": "T5-4",
+        "Vendor": "Oracle"
+    }, 
+    {
+        "Model": "T5-2",
+        "Vendor": "Oracle"
+    } 
+]
