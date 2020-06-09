@@ -1,74 +1,97 @@
-use tokio;
-use serde_json::{
-    json,
-    map::Map
+mod error;
+
+use std::fs;
+use std::str::FromStr;
+use std::path::PathBuf;
+
+use crate::error::FwPullError;
+use scraper::{
+    Server,
+    ServerIn,
+    Vendor,
+    get_dell_bios,
+    write_output,
 };
-use fantoccini::{Client, Locator};
-use futures_util::future::TryFutureExt;
 
+use serde_json::json;
+use structopt::StructOpt;
+use fantoccini::Client;
 
-fn dell_model(model: String) -> String {
-    return model.to_lowercase().replace(" ", "-")
-}
+fn main() -> Result<(), FwPullError> {
+    let args = Args::from_args();
+    
+    let models = match fs::read_to_string(&args.input) {
+        Ok(j) => j,
+        Err(e) => {
+            eprintln!("An error occured while trying to open {}: {}", args.input.to_string_lossy(), e);
+            std::process::exit(1);
+        }
+    };
+    let models: Vec<ServerIn> = match serde_json::from_str(&models) {
+        Ok(j) => j,
+        Err(e) => {
+            eprintln!("An error occured while deserializing the input: {}", e);
+            std::process::exit(1);
+        }
+    };
 
-async fn get_dell_bios(client: &mut Client, model: String) -> Result<(), fantoccini::error::CmdError> {
-    // The longest the url should be for dell is 86 characters this will keep us from reallocating with each push
-    let mut url: String = String::with_capacity(86); 
-    url.push_str("https://www.dell.com/support/home/us/en/04/product-support/product/");
-    url.push_str(&model);
-    url.push_str("/drivers");
+    smol::run( async {
+        // create the capabilities object to set the options for the webdriver
+        let cap_json = json!({
+            "moz:firefoxOptions": {
+                "args": ["--headless"]
+            }
+        });
+        let capabilities = cap_json.as_object().unwrap().to_owned();
 
-    // create vars for all the locators we will need
-    let os_str = r#"//select[@id='operating-system']"#;
-    let naa_str = r#"//option[@value='NAA']"#;
-    let ddl_str = r#"//select[@id='ddl-category']"#;
-    let bios_str = r#"//option[@value='BI']"#;
+        let mut c = match args.debug {
+            true => Client::new("http://localhost:4444").await.expect("failed to connect to web driver"),
+            false => Client::with_capabilities("http://localhost:4444", capabilities).await.expect("failed to connect to web driver"),
+        };
 
-    // got ot the page
-    client.goto(&url).await?;
+        let mut out: Vec<Server> = Vec::with_capacity(models.len());
 
-    // walk through abd click the necessary elements
-    client.clone().wait_for_find(Locator::XPath(os_str))
-        .and_then(|element| element.click())
-        .and_then(move |client| client.wait_for_find(Locator::XPath(naa_str)))
-        .and_then(|element| element.click())
-        .and_then(move |client| client.wait_for_find(Locator::XPath(ddl_str)))
-        .and_then(|element| element.click())
-        .and_then(move |client| client.wait_for_find(Locator::XPath(bios_str)))
-        .and_then(|element| element.click())
-        .map_err(|err| panic!("a WebDriver command failed: {:?}", err))
-        .await;
-
-    //println!("{}", client.source().await?);
-
-    Ok(())
-}
-
-#[tokio::main]
-async fn main() -> Result<(), fantoccini::error::CmdError> {
-    //let mut capabilities = Map::new();
-    //capabilities.insert("headless".to_string(), json!(true));
-    let cap_json = json!({
-        "moz:firefoxOptions": {
-            "prefs": {
-                "headless": true
+        for model in models {
+            match Vendor::from_str(&model.vendor) {
+                Ok(v) => {
+                    match v {
+                        Vendor::Dell => {
+                            let fw_info = get_dell_bios(&mut c, &model).await?;
+                            out.push(fw_info);
+                        },
+                        _ => eprintln!("Unimplemented vendor")
+                    }
+                },
+                Err(e) => eprintln!("{}", e),
             }
         }
-    });
 
-    println!("{:?}", cap_json.as_object());
+        match args.output {
+            Some(p) => {
+                if let Err(e) = write_output(out, p) {
+                    eprintln!("Failed to write json file: {}", e);
+                }
+            },
+            None => println!("{:?}", out),
+        }
 
-    let capabilities = cap_json.as_object().unwrap().to_owned();
+        match c.close().await {
+            Ok(o) => Ok(o),
+            Err(e) => Err(FwPullError::from(e)),
+        }
+    })
+}
 
-    let models = vec!["Poweredge R630", "Poweredge R330", "Poweredge R730", "Poweredge R930"];
-    let mut c = Client::with_capabilities("http://localhost:4444", capabilities).await.expect("failed to connect to web driver");
-    //let mut c = Client::new("http://localhost:4444").await.expect("failed to connect to web driver");
-
-    for model in models {
-        let model = dell_model(model.to_string());
-        get_dell_bios(&mut c, model).await?;    
-    }
-
-
-    c.close().await
+#[derive(Debug, StructOpt)]
+#[structopt(name = "fw_pull", about = "Pulls vendor firmware from their websites")]
+struct Args{
+    /// Path to input JSON with server information
+    #[structopt(short, long, parse(from_os_str))]
+    input: PathBuf,
+    /// Path to output JSON
+    #[structopt(short, long, parse(from_os_str))]
+    output: Option<PathBuf>,
+    /// Turns on debug mode and runs the browser in the foreground
+    #[structopt(short, long)]
+    debug: bool
 }
