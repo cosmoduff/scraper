@@ -8,11 +8,15 @@ edition = "2018"
 
 [dependencies]
 regex = "1.0"
+reqwest = "^0.10"
 serde = { version = "^1.0", features = ["derive"] }
 serde_json = "1.0"
-smol = { version = "0.1", features = ["tokio02"] }
+tokio = { version = "0.2", features = ["full"] }
 futures = "0.3.4"
-fantoccini = "0.12.0-alpha.2"
+fantoccini = "^0.14"
 structopt = { version = "^0.3", features = [ "paw" ] }
 paw = "1.0"
-soup = "0.4"
+soup = "0.5"
+select = "^0.4"
+lazy_static = "^1"
+url = "^2"
