@@ -8,16 +8,16 @@ use soup::prelude::*;
 use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::time::Duration;
 use std::thread;
+use std::time::Duration;
 
 use fantoccini::{Client, Locator};
 use futures::prelude::*;
-use regex::{Regex, Captures};
-use url::Url;
-use serde::{Deserialize, Serialize};
+use regex::{Captures, Regex};
 use select::document::Document;
-use select::predicate::{Predicate, Attr, Class, Name};
+use select::predicate::{Attr, Class, Name, Predicate};
+use serde::{Deserialize, Serialize};
+use url::Url;
 
 pub fn write_output(fw_info: Vec<Server>, path: PathBuf) -> Result<(), FwPullError> {
     let file = fs::File::create(&path)?;
@@ -239,7 +239,9 @@ pub async fn get_hp_bios(client: &mut Client, server: &ServerIn) -> Result<Serve
     if let Some(u) = new_url {
         client.goto(u.as_str()).await?;
     } else {
-        return Err(FwPullError::SoupNotFound("Could not navigate to new url".to_string()))
+        return Err(FwPullError::SoupNotFound(
+            "Could not navigate to new url".to_string(),
+        ));
     }
 
     let result_page_html = client
@@ -303,19 +305,17 @@ pub async fn get_oracle_bios(server: &ServerIn) -> Result<Server, FwPullError> {
 
     for tr in tr_all {
         if out.current.is_none() {
-            out.current = match tr.find(Name("a").and(Attr("id", server.model.as_str()))).next() {
-                Some(_) => {
-                    tr.find(Name("strong")).next()
-                        .and_then(
-                            |ver| {
-                                if let Some(m) = ORACLE_VER.find(&ver.text()) {
-                                    Some(m.as_str().to_string())
-                                } else {
-                                    None
-                                }
-                            }
-                        )
-                },
+            out.current = match tr
+                .find(Name("a").and(Attr("id", server.model.as_str())))
+                .next()
+            {
+                Some(_) => tr.find(Name("strong")).next().and_then(|ver| {
+                    if let Some(m) = ORACLE_VER.find(&ver.text()) {
+                        Some(m.as_str().to_string())
+                    } else {
+                        None
+                    }
+                }),
                 None => None,
             };
         } else {
@@ -326,26 +326,29 @@ pub async fn get_oracle_bios(server: &ServerIn) -> Result<Server, FwPullError> {
                     } else {
                         None
                     }
-                },
+                }
                 None => None,
             };
-            break
+            break;
         }
     }
-    
+
     Ok(out)
 }
 
 fn get_hp_date_sort_url(url: Url) -> Option<Url> {
     lazy_static! {
-        static ref HP_URL: Regex = Regex::new(r"(^t=DriversandSoftware&sort=relevancy&layout=table&numberOfResults=25&f)(.*)").unwrap();
+        static ref HP_URL: Regex = Regex::new(
+            r"(^t=DriversandSoftware&sort=relevancy&layout=table&numberOfResults=25&f)(.*)"
+        )
+        .unwrap();
     }
 
     let mut new_url = url.clone();
     let result = if let Some(f) = url.fragment() {
-        HP_URL.replace(f, |caps: &Captures| {format!("t=DriversandSoftware&sort=%40hpescuniversaldate descending&layout=table&numberOfResults=25&f{}",&caps[2])}) 
+        HP_URL.replace(f, |caps: &Captures| {format!("t=DriversandSoftware&sort=%40hpescuniversaldate descending&layout=table&numberOfResults=25&f{}",&caps[2])})
     } else {
-        return None
+        return None;
     };
 
     new_url.set_fragment(Some(&result));

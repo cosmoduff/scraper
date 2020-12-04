@@ -1,8 +1,8 @@
 mod error;
 
 use std::fs;
-use std::str::FromStr;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use crate::error::FwPullError;
 use scraper::{
@@ -12,7 +12,6 @@ use scraper::{
 use fantoccini::Client;
 use serde_json::json;
 use structopt::StructOpt;
-//use tokio::prelude::*;
 
 #[tokio::main]
 async fn main() -> Result<(), FwPullError> {
@@ -59,8 +58,7 @@ async fn main() -> Result<(), FwPullError> {
 
     let capabilities = cap_json.as_object().unwrap().to_owned();
 
-    let mut c =
-        Client::with_capabilities("http://localhost:4444", capabilities)
+    let mut c = Client::with_capabilities("http://localhost:4444", capabilities)
         .await
         .expect("failed to connect to web driver");
 
@@ -71,20 +69,16 @@ async fn main() -> Result<(), FwPullError> {
     for model in models {
         match Vendor::from_str(&model.vendor) {
             Ok(v) => match v {
-                Vendor::Dell => {
-                    match get_dell_bios(&mut c, &model).await {
-                        Ok(fw) => out.push(fw),
-                        Err(e) => {
-                            eprintln!("An error occurred getting Dell firmware: {}", e);
-                        }
+                Vendor::Dell => match get_dell_bios(&mut c, &model).await {
+                    Ok(fw) => out.push(fw),
+                    Err(e) => {
+                        eprintln!("An error occurred getting Dell firmware: {}", e);
                     }
-                }
-                Vendor::Hp => {
-                    match get_hp_bios(&mut c, &model).await {
-                        Ok(fw) => out.push(fw),
-                        Err(e) => eprintln!("An error occurred getting HP firmware: {}", e),
-                    }
-                }
+                },
+                Vendor::Hp => match get_hp_bios(&mut c, &model).await {
+                    Ok(fw) => out.push(fw),
+                    Err(e) => eprintln!("An error occurred getting HP firmware: {}", e),
+                },
                 Vendor::Oracle => {
                     match get_oracle_bios(&model).await {
                         Ok(fw) => out.push(fw),
