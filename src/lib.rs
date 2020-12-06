@@ -8,14 +8,12 @@ use soup::prelude::*;
 use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::thread;
-use std::time::Duration;
 
 use fantoccini::{Client, Locator};
 use futures::prelude::*;
 use regex::{Captures, Regex};
 use select::document::Document;
-use select::predicate::{Attr, Class, Name, Predicate};
+use select::predicate::{Attr, Name, Predicate};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
