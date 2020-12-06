@@ -1,6 +1,7 @@
 mod error;
 
 use std::fs;
+use std::process::{Command, Child, Stdio};
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -58,9 +59,27 @@ async fn main() -> Result<(), FwPullError> {
 
     let capabilities = cap_json.as_object().unwrap().to_owned();
 
-    let mut c = Client::with_capabilities("http://localhost:4444", capabilities)
-        .await
-        .expect("failed to connect to web driver");
+    let mut geckodriver: Option<Child> = None;
+    let mut c = match Client::with_capabilities("http://localhost:4444", capabilities.clone()).await {
+        Ok(client) => client,
+        Err(_) => {
+            println!("geckodriver is not running. Attempting to start....");
+            match Command::new("geckodriver")
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn() {
+                Ok(child) => {
+                    geckodriver = Some(child);
+                    println!("started geckodriver");
+                    Client::with_capabilities("http://localhost:4444", capabilities).await.expect("unable to connect to the geckodriver. Exitting...")
+                },
+                Err(_) => {
+                    eprintln!("Failed to start geckdriver. Exitting...");
+                    std::process::exit(1);
+                },
+            }
+        }
+    };
 
     c.set_window_size(1920, 1080).await?;
 
@@ -93,13 +112,26 @@ async fn main() -> Result<(), FwPullError> {
         }
     }
 
+    // write the output to a file or print the output. 
+    // if serializing to json fails for printing the struct in debug mode is printed
     match args.output {
         Some(p) => {
             if let Err(e) = write_output(out, p) {
                 eprintln!("Failed to write json file: {}", e);
             }
         }
-        None => println!("{:?}", out),
+        None => {
+            match serde_json::to_string_pretty(&out) {
+                Ok(pj) => println!("{}", pj),
+                Err(_) => println!("{:?}", out),
+            }
+        },
+    }
+
+    if let Some( mut gd) = geckodriver {
+        if let Err(e) = gd.kill() {
+            eprintln!("Failed to stop spawned geckodriver driver process: {}", e);
+        }
     }
 
     match c.close().await {
